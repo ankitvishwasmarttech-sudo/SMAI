@@ -1,0 +1,28 @@
+<menu name="main_ivr"
+      greet-long="ivr/ivr-welcome_to_freeswitch.wav"
+      greet-short="ivr/ivr-welcome_to_freeswitch.wav"
+      invalid-sound="ivr/ivr-that_was_an_invalid_entry.wav"
+      exit-sound="voicemail/vm-goodbye.wav"
+      timeout="10000"
+      inter-digit-timeout="2000"
+      max-failures="3"
+      max-timeouts="3"
+      digit-len="1">
+
+  <!-- Press 1: AI Sales Agent -->
+  <entry action="menu-exec-app" digits="1"
+         param="socket 127.0.0.1:5000 async full"/>
+
+  <!-- Press 2: Live agent -->
+  <entry action="menu-exec-app" digits="2"
+         param="bridge user/agent1@${domain}"/>
+
+  <!-- Press 0: Repeat menu -->
+  <entry action="menu-play-sound" digits="0"
+         param="ivr/ivr-welcome_to_freeswitch.wav"/>
+
+  <!-- Timeout: default to AI agent -->
+  <entry action="menu-exec-app" digits="timeout"
+         param="socket 127.0.0.1:5000 async full"/>
+
+</menu>

@@ -1,0 +1,23 @@
+[Unit]
+Description=AI Calling Bridge — FreeSWITCH to OpenAI Realtime
+After=network.target freeswitch.service
+Wants=freeswitch.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/ai-bridge
+EnvironmentFile=/opt/ai-bridge/.env
+ExecStart=/opt/ai-bridge/venv/bin/python fast_ai_bridge.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ai-bridge
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,24 @@
+[Unit]
+Description=n8n Workflow Automation
+After=network.target redis.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root
+EnvironmentFile=/opt/ai-bridge/.env
+Environment=N8N_PORT=3000
+Environment=N8N_BASIC_AUTH_ACTIVE=true
+Environment=N8N_BASIC_AUTH_USER=admin
+Environment=N8N_BASIC_AUTH_PASSWORD=changeme_strong
+Environment=N8N_EDITOR_BASE_URL=http://YOUR_SERVER_IP:3000
+Environment=WEBHOOK_URL=http://YOUR_SERVER_IP:3000
+ExecStart=/usr/bin/n8n start
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=n8n
+
+[Install]
+WantedBy=multi-user.target
