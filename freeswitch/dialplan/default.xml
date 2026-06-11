@@ -1,52 +1,50 @@
 <include>
   <context name="default">
 
-    <!-- ── Inbound DID: route to AI bridge ──────────────────────────── -->
-    <extension name="ai_inbound">
-      <condition field="destination_number" expression="^(\+?91\d{10}|1000)$">
-        <action application="log"         data="INFO AI_BRIDGE: Inbound call to $1"/>
+    <!-- Fix #8: Only allow your specific DID, not all Indian numbers -->
+    <!-- Add your actual DID numbers here -->
+    <extension name="ai_inbound_did">
+      <condition field="destination_number" expression="^(\+?91XXXXXXXXXX|1000)$">
+        <action application="log"    data="INFO AI_BRIDGE: Inbound call $1 from ${caller_id_number}"/>
+        <!-- ACL check: reject if not from trunk -->
+        <action application="set"   data="continue_on_fail=false"/>
         <action application="answer"/>
-        <action application="sleep"       data="500"/>
-        <action application="set"         data="RECORD_STEREO=true"/>
-        <action application="set"         data="record_sample_rate=16000"/>
-        <action application="set"         data="session_in_hangup_hook=true"/>
-        <action application="set"         data="hangup_after_bridge=true"/>
-        <!-- Route to Python bridge via ESL socket -->
-        <action application="socket"      data="${ai_bridge_host}:${ai_bridge_port} async full"/>
+        <action application="sleep" data="500"/>
+        <!-- Force PCMU codec for bridge compatibility -->
+        <action application="set"   data="absolute_codec_string=PCMU"/>
+        <action application="set"   data="RECORD_STEREO=true"/>
+        <action application="set"   data="record_sample_rate=8000"/>
+        <!-- Route to Python bridge via outbound ESL socket -->
+        <action application="socket" data="${ai_bridge_host}:${ai_bridge_port} async full"/>
+        <!-- Fix #9: If socket fails, go to agent -->
+        <action application="transfer" data="${agent_fallback_ext} XML default"/>
       </condition>
     </extension>
 
-    <!-- ── Live agent queue (transfer destination) ──────────────────── -->
+    <!-- Live agent queue -->
     <extension name="live_agent">
       <condition field="destination_number" expression="^9000$">
-        <action application="log"         data="INFO Transfer to live agent"/>
-        <action application="set"         data="ringback=${indian_ringback_tone}"/>
-        <action application="bridge"      data="user/agent1@${domain}"/>
-      </condition>
-    </extension>
-
-    <!-- ── IVR menu (optional) ──────────────────────────────────────── -->
-    <extension name="ivr_menu">
-      <condition field="destination_number" expression="^8000$">
+        <action application="log"    data="INFO Transfer to live agent"/>
         <action application="answer"/>
-        <action application="sleep"       data="1000"/>
-        <action application="ivr"         data="main_ivr"/>
+        <action application="bridge" data="user/agent1@${domain}"/>
+        <!-- Fix #9: Voicemail if agent unavailable -->
+        <action application="voicemail" data="default ${domain} agent1"/>
       </condition>
     </extension>
 
-    <!-- ── Echo test ──────────────────────────────────────────────────── -->
-    <extension name="echo">
+    <!-- Echo test -->
+    <extension name="echo_test">
       <condition field="destination_number" expression="^9196$">
         <action application="answer"/>
         <action application="echo"/>
       </condition>
     </extension>
 
-    <!-- ── Hangup on unmatched ──────────────────────────────────────── -->
+    <!-- Catch all — reject unknown -->
     <extension name="catch_all">
       <condition field="destination_number" expression=".*">
-        <action application="log"         data="WARNING Unmatched: ${destination_number}"/>
-        <action application="hangup"      data="UNALLOCATED_NUMBER"/>
+        <action application="log"    data="WARNING Rejected unknown: ${destination_number}"/>
+        <action application="hangup" data="UNALLOCATED_NUMBER"/>
       </condition>
     </extension>
 

@@ -1,15 +1,16 @@
 <include>
-  <!-- Replace credentials with your SIP provider values -->
   <gateway name="primary_trunk">
-    <param name="username"          value="YOUR_SIP_USER"/>
-    <param name="password"          value="YOUR_SIP_PASS"/>
-    <param name="proxy"             value="sip.yourprovider.com"/>
-    <param name="register"          value="true"/>
+    <param name="username"           value="YOUR_SIP_USER"/>
+    <param name="password"           value="YOUR_SIP_PASS"/>
+    <param name="proxy"              value="sip.yourprovider.com"/>
+    <param name="register"           value="true"/>
     <param name="register-transport" value="udp"/>
-    <param name="expire-seconds"    value="600"/>
-    <param name="retry-seconds"     value="30"/>
-    <param name="caller-id-in-from" value="true"/>
-    <param name="contact-params"    value="tport=udp"/>
-    <param name="ping"              value="25"/>
+    <param name="expire-seconds"     value="600"/>
+    <param name="retry-seconds"      value="30"/>
+    <param name="caller-id-in-from"  value="true"/>
+    <param name="ping"               value="25"/>
+    <!-- Fix #7: NAT contact params -->
+    <param name="contact-params"     value="tport=udp;ob"/>
+    <param name="extension-in-contact" value="true"/>
   </gateway>
 </include>

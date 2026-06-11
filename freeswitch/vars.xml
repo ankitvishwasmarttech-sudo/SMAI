@@ -1,26 +1,29 @@
 <include>
-  <!-- Replace YOUR_PUBLIC_IP with your server IP -->
+  <!-- Set to your actual public IP -->
   <X-PRE-PROCESS cmd="set" data="domain=YOUR_PUBLIC_IP"/>
   <X-PRE-PROCESS cmd="set" data="domain_name=$${domain}"/>
   <X-PRE-PROCESS cmd="set" data="external_sip_ip=YOUR_PUBLIC_IP"/>
   <X-PRE-PROCESS cmd="set" data="external_rtp_ip=YOUR_PUBLIC_IP"/>
   <X-PRE-PROCESS cmd="set" data="bind_server_ip=auto"/>
 
-  <!-- Codec preferences -->
-  <X-PRE-PROCESS cmd="set" data="global_codec_prefs=PCMU,PCMA,G729"/>
+  <!-- Fix #7: NAT traversal params for cloud deployments -->
+  <X-PRE-PROCESS cmd="set" data="sip-nat-auto-rtp=true"/>
+  <X-PRE-PROCESS cmd="set" data="aggressive-nat-detection=true"/>
+  <X-PRE-PROCESS cmd="set" data="NDLB-received-in-nat-reg-contact=true"/>
+  <X-PRE-PROCESS cmd="set" data="sip-force-expires=60"/>
+
+  <!-- Codec: PCMU first (required by bridge) -->
+  <X-PRE-PROCESS cmd="set" data="global_codec_prefs=PCMU,PCMA"/>
   <X-PRE-PROCESS cmd="set" data="outbound_codec_prefs=PCMU,PCMA"/>
 
   <!-- AI Bridge -->
   <X-PRE-PROCESS cmd="set" data="ai_bridge_host=127.0.0.1"/>
   <X-PRE-PROCESS cmd="set" data="ai_bridge_port=5000"/>
 
-  <!-- Default caller ID -->
+  <!-- Caller ID -->
   <X-PRE-PROCESS cmd="set" data="default_caller_id_name=SmartTech"/>
   <X-PRE-PROCESS cmd="set" data="default_caller_id_number=+91XXXXXXXXXX"/>
 
-  <!-- Hold music -->
-  <X-PRE-PROCESS cmd="set" data="hold_music=local_stream://moh"/>
-
-  <!-- Tones -->
-  <X-PRE-PROCESS cmd="set" data="indian_ringback_tone=%(400,200,400),(400,200,400),(0,2000,0);loops=-1"/>
+  <!-- Agent fallback extension (Fix #9) -->
+  <X-PRE-PROCESS cmd="set" data="agent_fallback_ext=9000"/>
 </include>

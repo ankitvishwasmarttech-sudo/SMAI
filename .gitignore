@@ -1,9 +1,6 @@
 .env
 __pycache__/
 *.pyc
-*.pyo
 node_modules/
-dashboard/dist/
-dashboard/.vite/
 *.log
 .DS_Store

@@ -1,5 +1,5 @@
 [Unit]
-Description=AI Calling Bridge — FreeSWITCH to OpenAI Realtime
+Description=AI Calling Bridge
 After=network.target freeswitch.service
 Wants=freeswitch.service
 
@@ -14,10 +14,7 @@ RestartSec=5
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=ai-bridge
-
-# Resource limits
 LimitNOFILE=65536
-LimitNPROC=4096
 
 [Install]
 WantedBy=multi-user.target
