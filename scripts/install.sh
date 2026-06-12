@@ -1,6 +1,5 @@
 #!/bin/bash
-# Safe installer — Fix #3: no blind ufw reset, no auto apt upgrade
-# Fix #4: correct Ubuntu 22.04 jammy FreeSWITCH repo
+# SMAI Install Script — FreeSWITCH from source (Ubuntu 22.04)
 set -euo pipefail
 log()  { echo -e "\033[1;32m[$(date +%T)] $*\033[0m"; }
 warn() { echo -e "\033[1;33m[WARN] $*\033[0m"; }
@@ -8,26 +7,26 @@ err()  { echo -e "\033[1;31m[ERROR] $*\033[0m" >&2; exit 1; }
 
 [[ $EUID -ne 0 ]] && err "Run as root"
 
-OS=$(lsb_release -sc 2>/dev/null || echo "unknown")
-log "Detected OS codename: $OS"
-
-# ── Fix #3: Safe apt — no blind upgrade ──────────────────────────────────────
+# ── 1. Base packages ──────────────────────────────────────────────────
 log "Installing base packages..."
 apt update -q
-# Only install what's needed, no dist-upgrade
 apt install -y --no-install-recommends \
     curl wget git vim net-tools htop \
     ufw fail2ban redis-server \
     docker.io docker-compose \
     python3.11 python3.11-venv python3-pip \
-    gnupg2 lsb-release jq
+    gnupg2 lsb-release jq \
+    build-essential cmake autoconf automake libtool libtool-bin \
+    pkg-config libssl-dev libsqlite3-dev libcurl4-openssl-dev \
+    libpcre3-dev libspeexdsp-dev libldns-dev libedit-dev \
+    uuid-dev libopus-dev libsndfile1-dev libjpeg-dev libtiff-dev \
+    libsofia-sip-ua-dev libpq-dev yasm nasm python3-distutils
 
-# ── Fix #3: Safe firewall — add rules, don't reset ───────────────────────────
-log "Configuring firewall (adding rules, NOT resetting)..."
+# ── 2. Firewall — safe, no reset ─────────────────────────────────────
+log "Configuring firewall..."
 ufw allow OpenSSH        2>/dev/null || true
 ufw allow 5060/udp       2>/dev/null || true
 ufw allow 5060/tcp       2>/dev/null || true
-ufw allow 5080/udp       2>/dev/null || true
 ufw allow 16384:32768/udp 2>/dev/null || true
 ufw allow 8021/tcp       2>/dev/null || true
 ufw allow 5000/tcp       2>/dev/null || true
@@ -35,57 +34,58 @@ ufw allow 3000/tcp       2>/dev/null || true
 ufw allow 3001/tcp       2>/dev/null || true
 ufw allow 9090/tcp       2>/dev/null || true
 ufw allow 8000/tcp       2>/dev/null || true
-# Only enable if not already active
 ufw status | grep -q "Status: active" || ufw --force enable
-log "Firewall rules added"
+log "Firewall done"
 
-# ── Fix #4: Correct repo for Ubuntu 22.04 jammy ──────────────────────────────
-log "Installing FreeSWITCH (Ubuntu 22.04 jammy repo)..."
-TOKEN=${SIGNALWIRE_TOKEN:-""}
-[[ -z "$TOKEN" ]] && err "Set SIGNALWIRE_TOKEN env var (free at signalwire.com)"
+# ── 3. SpanDSP ────────────────────────────────────────────────────────
+log "Building SpanDSP..."
+cd /usr/src
+[[ -d spandsp ]] || git clone https://github.com/freeswitch/spandsp.git
+cd spandsp
+./bootstrap.sh && ./configure && make -j$(nproc) && make install
+ldconfig
 
-wget -q --http-user=signalwire --http-password=$TOKEN \
-     -O /usr/share/keyrings/signalwire-freeswitch-repo.gpg \
-     https://freeswitch.signalwire.com/repo/deb/debian-release/signalwire-freeswitch-repo.gpg
+# ── 4. Sofia-SIP ──────────────────────────────────────────────────────
+log "Building Sofia-SIP..."
+cd /usr/src
+[[ -d sofia-sip ]] || git clone https://github.com/freeswitch/sofia-sip.git
+cd sofia-sip
+./bootstrap.sh && ./configure && make -j$(nproc) && make install
+ldconfig
 
-echo "machine freeswitch.signalwire.com login signalwire password $TOKEN" \
-     > /etc/apt/auth.conf
-chmod 600 /etc/apt/auth.conf
+# ── 5. libks ──────────────────────────────────────────────────────────
+log "Building libks..."
+cd /usr/src
+[[ -d libks ]] || git clone https://github.com/signalwire/libks.git
+cd libks
+cmake . && make -j$(nproc) && make install
+ldconfig
 
-# Fix #4: Use jammy for Ubuntu 22.04, focal for 20.04
-if [[ "$OS" == "jammy" ]]; then
-    REPO_DIST="jammy"
-elif [[ "$OS" == "focal" ]]; then
-    REPO_DIST="focal"
-else
-    warn "Unknown OS $OS — defaulting to jammy"
-    REPO_DIST="jammy"
-fi
+# ── 6. FreeSWITCH from source ─────────────────────────────────────────
+log "Building FreeSWITCH (15-20 min)..."
+cd /usr/src
+[[ -d freeswitch ]] || git clone https://github.com/signalwire/freeswitch.git
+cd freeswitch
+git checkout v1.10.11
 
-echo "deb [signed-by=/usr/share/keyrings/signalwire-freeswitch-repo.gpg] \
-  https://freeswitch.signalwire.com/repo/deb/debian-release/ ${REPO_DIST} main" \
-  > /etc/apt/sources.list.d/freeswitch.list
+# Disable modules we don't need
+cp modules.conf modules.conf.bak
+sed -i 's|^applications/mod_verto|#applications/mod_verto|' modules.conf
+sed -i 's|^applications/mod_signalwire|#applications/mod_signalwire|' modules.conf
+sed -i 's|^applications/mod_av|#applications/mod_av|' modules.conf
 
-apt update -q
+./bootstrap.sh -j
+./configure
+make -j$(nproc)
+make install
+make samples
 
-# Fix #5: Install only required modules, not meta-all
-log "Installing FreeSWITCH (minimal modules only)..."
-apt install -y \
-    freeswitch \
-    freeswitch-mod-sofia \
-    freeswitch-mod-event-socket \
-    freeswitch-mod-commands \
-    freeswitch-mod-dptools \
-    freeswitch-mod-loopback \
-    freeswitch-mod-audio-stream \
-    freeswitch-mod-dialplan-xml \
-    freeswitch-mod-voicemail \
-    freeswitch-sounds-en-us-callie
+ln -sf /usr/local/freeswitch/bin/freeswitch /usr/bin/freeswitch
+ln -sf /usr/local/freeswitch/bin/fs_cli /usr/bin/fs_cli
+ldconfig
+log "FreeSWITCH installed"
 
-systemctl enable freeswitch
-log "FreeSWITCH installed (minimal)"
-
-# ── Python bridge ─────────────────────────────────────────────────────────────
+# ── 7. Python bridge ──────────────────────────────────────────────────
 log "Setting up Python bridge..."
 mkdir -p /opt/ai-bridge
 cp -r bridge/* /opt/ai-bridge/
@@ -104,16 +104,15 @@ systemctl daemon-reload
 systemctl enable ai-bridge
 log "Bridge installed"
 
-# ── FreeSWITCH config ─────────────────────────────────────────────────────────
+# ── 8. Copy FS config ─────────────────────────────────────────────────
 log "Copying FreeSWITCH config..."
-cp freeswitch/vars.xml                       /etc/freeswitch/vars.xml
-cp freeswitch/dialplan/default.xml           /etc/freeswitch/dialplan/default.xml
-cp freeswitch/sip_profiles/trunk.xml         /etc/freeswitch/sip_profiles/external/ai_trunk.xml
-cp freeswitch/ivr/main_ivr.xml               /etc/freeswitch/ivr_menus/main_ivr.xml 2>/dev/null || true
+cp freeswitch/vars.xml              /usr/local/freeswitch/conf/vars.xml
+cp freeswitch/dialplan/default.xml  /usr/local/freeswitch/conf/dialplan/default.xml
+cp freeswitch/sip_profiles/trunk.xml /usr/local/freeswitch/conf/sip_profiles/external/ai_trunk.xml
 
-# ── n8n ───────────────────────────────────────────────────────────────────────
+# ── 9. n8n ────────────────────────────────────────────────────────────
 log "Installing n8n..."
-curl -fsSL https://deb.nodesource.com/setup_20.x | bash - > /dev/null
+curl -fsSL https://deb.nodesource.com/setup_20.x | bash - >/dev/null
 apt install -y nodejs
 npm install -g n8n --quiet
 cp systemd/n8n.service /etc/systemd/system/
@@ -121,18 +120,16 @@ systemctl daemon-reload
 systemctl enable n8n
 log "n8n installed"
 
-# ── Redis ─────────────────────────────────────────────────────────────────────
+# ── 10. Redis + Docker services ───────────────────────────────────────
 systemctl enable --now redis-server
-
-# ── Monitoring ────────────────────────────────────────────────────────────────
 log "Starting monitoring stack..."
 cd monitoring && docker-compose up -d && cd ..
 
 log ""
 log "=== Installation complete ==="
 log "NEXT STEPS:"
-log "1. Edit /etc/freeswitch/vars.xml        → YOUR_PUBLIC_IP, NAT settings"
-log "2. Edit sip_profiles/external/ai_trunk.xml → SIP credentials"
-log "3. Edit /opt/ai-bridge/.env             → OPENAI_API_KEY, correct ESL_PASSWORD"
+log "1. Edit /usr/local/freeswitch/conf/vars.xml       → YOUR_PUBLIC_IP"
+log "2. Edit conf/sip_profiles/external/ai_trunk.xml  → SIP credentials"
+log "3. Edit /opt/ai-bridge/.env                       → OPENAI_API_KEY"
 log "4. systemctl start freeswitch ai-bridge n8n"
 log "5. bash scripts/test_call.sh"
